@@ -1,0 +1,31 @@
+{
+  "name": "graphql-to-cypher",
+  "version": "0.0.0",
+  "description": "Adapter to turn GraphQL into cypher queries",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/rschmukler/graphql-to-cypher.git"
+  },
+  "keywords": [
+    "graphql",
+    "cypher",
+    "neo4j"
+  ],
+  "author": "Ryan Schmukler <ryan@slingingcode.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/rschmukler/graphql-to-cypher/issues"
+  },
+  "homepage": "https://github.com/rschmukler/graphql-to-cypher#readme",
+  "devDependencies": {
+    "babel": "^5.6.14",
+    "expect.js": "^0.3.1",
+    "gulp": "^3.9.0",
+    "gulp-babel": "^5.1.0",
+    "gulp-mocha": "^2.1.2"
+  }
+}
