@@ -1,3 +1,6 @@
+var sourcemaps = require('gulp-sourcemaps');
+require('source-map-support').install();
+
 require('babel/register');
 
 var gulp = require('gulp');
@@ -8,22 +11,23 @@ var babel = require('gulp-babel');
 var plumb = require('gulp-plumber');
 var mocha = require('gulp-mocha');
 
+
 gulp.task('test', ['build'], function() {
   return gulp.src('test/**/*.js')
     .pipe(mocha());
 });
 
 gulp.task('build', function() {
-  gulp.src(['src/**/*.js'])
+  return gulp.src(['src/*.js'])
     .pipe(plumber())
     .pipe(cache('js'))
-    .pipe(babel())
+    .pipe(babel({ sourceMaps: 'inline' }))
     .pipe(remember('js'))
     .pipe(gulp.dest('dist/'));
 });
 
 gulp.task('watch', ['build'], function() {
-  var jsWatch = gulp.watch(['src/**/*.js', 'test/**/*.js'], ['test'])
+  var jsWatch = gulp.watch(['src/*.js', 'test/**/*.js'], ['test'])
     .on('change', checkRemoved('js'));
 
  function checkRemoved(name) {

@@ -1,1 +1,3 @@
-export * from './cypher-mapper';
+import CypherMapper from './cypher-mapper';
+
+export { CypherMapper };

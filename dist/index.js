@@ -4,10 +4,11 @@ Object.defineProperty(exports, '__esModule', {
   value: true
 });
 
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj['default'] = obj; return newObj; } }
-
-function _defaults(obj, defaults) { var keys = Object.getOwnPropertyNames(defaults); for (var i = 0; i < keys.length; i++) { var key = keys[i]; var value = Object.getOwnPropertyDescriptor(defaults, key); if (value && value.configurable && obj[key] === undefined) { Object.defineProperty(obj, key, value); } } return obj; }
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
 
 var _cypherMapper = require('./cypher-mapper');
 
-_defaults(exports, _interopRequireWildcard(_cypherMapper));
+var _cypherMapper2 = _interopRequireDefault(_cypherMapper);
+
+exports.CypherMapper = _cypherMapper2['default'];
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbImluZGV4LmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7OzRCQUF5QixpQkFBaUI7Ozs7UUFFakMsWUFBWSIsImZpbGUiOiJpbmRleC5qcyIsInNvdXJjZXNDb250ZW50IjpbImltcG9ydCBDeXBoZXJNYXBwZXIgZnJvbSAnLi9jeXBoZXItbWFwcGVyJztcblxuZXhwb3J0IHsgQ3lwaGVyTWFwcGVyIH07XG4iXX0=
