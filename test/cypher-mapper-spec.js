@@ -1,6 +1,13 @@
 import expect from 'expect.js';
 import { CypherMapper } from '../dist/';
 
+import {
+  graphql,
+  GraphQLSchema,
+  GraphQLObjectType,
+  GraphQLString
+} from 'graphql';
+
 describe('CypherMapper', () => {
   var testMapper;
 
@@ -29,6 +36,14 @@ describe('CypherMapper', () => {
   });
 
   describe('#expose', () => {
+    it('requires a name');
+    it('requires a type');
+    it('requires a description', () => {
+      var noDescription = () => { testMapper.expose('id', 'number'); };
+      expect(noDescription).to.throwError(/Description is required for field "id"/);
+    });
+
+    it('returns itself');
     it('adds it to the field map', () => {
       testMapper.expose('name', 'string', 'The name');
       expect(testMapper._fields).to.have.property('name');
@@ -48,25 +63,96 @@ describe('CypherMapper', () => {
         type: 'number'
       });
     });
+  });
+
+  describe('#query', () => {
     it('requires a name');
     it('requires a type');
-    it('requires a description', () => {
-      var noDescription = () => { testMapper.expose('id', 'number'); };
-      expect(noDescription).to.throwError(/Description is required for field "id"/);
+    it('requires a description');
+    it('requires a cypher-query');
+    it('returns itself', () => {
+      expect(testMapper.query('favoriteFood', {}, 'Description', '')).to.be(testMapper);
     });
-    it('returns itself');
+
+    it('adds itself to the fields map', () => {
+      testMapper.query('favoriteFood', {}, 'Description', '');
+      expect(testMapper._fields.favoriteFood).to.be.ok();
+      expect(testMapper._fields.favoriteFood).to.eql({
+        type: {},
+        query: '',
+        description: 'Description'
+      });
+    });
+  });
+
+
+  describe('#buildGraphQLSchema', () => {
+    let result, fields;
+    beforeEach(() => {
+      testMapper.expose('name', 'string', 'Name');
+      testMapper.query('link', testMapper, 'Link', '(n)-[:LINK]->(link)');
+      result = testMapper.buildGraphQLSchema();
+      fields = result._typeConfig.fields();
+    });
+
+    it('builds the base definition', () => {
+      expect(result.name).to.be('Test');
+      expect(result.description).to.be('test mapper');
+    });
+
+    it('supports strings', () => {
+      expect(fields.name).to.be.ok();
+      expect(fields.name.type).to.be(GraphQLString);
+      expect(fields.name.description).to.be('Name');
+    });
+
+    it('supports other CypherMappers', () => {
+      expect(fields.link).to.be.ok();
+      expect(fields.link.type).to.be.a(GraphQLObjectType);
+      expect(fields.link.description).to.be('Link');
+    });
   });
 
   describe('#toCypher', () => {
     it('errors on an invalid query');
-    it('expands out related types');
     it('includes primitive fields', async () => {
       testMapper.expose('name', 'string', 'The name');
-      testMapper._nodeName = 'n';
-      let result = await testMapper.toCypher('{name}');
+      let result = await testMapper.toCypher('{name}', 'n');
       expect(result).to.be(`
       WITH n.name as name
       `.replace(/\n/g, '').trim());
     });
+
+    it('handles alias fields', async () => {
+      testMapper.expose('id(n) as id', 'number', 'The id');
+      let result = await testMapper.toCypher('{id}', 'n');
+      expect(result).to.be(`
+      WITH id(n) as id
+      `.replace(/\n/g, '').trim());
+    });
+
+    it.only('expands out related types', async () => {
+      let Person = new CypherMapper('Person', 'A person');
+
+      Person
+        .expose('name', 'string', 'The name of the person')
+        .query('bestFriend', Person, 'Friends of the person', '(n)-[:IS_BEST_FRIENDS_WITH]->(bestFriend:Person)');
+
+      let result = await Person.toCypher('{ name, bestFriend { name }}', 'n');
+      expectQuery(result, `
+      WITH (n)
+      MATCH (n)-[:IS_BEST_FRIENDS_WITH]->(nbestFriend:Person)
+      WITH n, { name: nbestFriend.name } as nbestFriend
+      WITH { name: n.name, bestFriend: nbestFriend } as n
+      `);
+    });
   });
 });
+
+function expectQuery(result, query) {
+  expect(normalize(result)).to.be(normalize(query));
+
+  function normalize(str) {
+    return str.replace(/\n/g, ' ').replace(/ +/g, ' ').trim();
+  }
+}

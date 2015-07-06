@@ -1,5 +1,6 @@
 import { parse } from 'graphql/lib/language/parser';
 import { execute } from 'graphql/lib/executor/executor';
+import { validateDocument } from 'graphql/lib/validator';
 
 import {
   graphql,
@@ -32,32 +33,99 @@ export default class CypherMapper {
       description,
       type
     };
+    return this;
   }
 
-  async toCypher(queryString) {
-    var parsedAST = parse(queryString);
+  query(name, type, description, query) {
+    this._fields[name] = {
+      type,
+      description
+    };
+    this._fields[name].resolve = () => { return Promise.resolve(query); };
+    return this;
+  }
 
-    var schema = new GraphQLSchema({
-      query: new GraphQLObjectType({
-        name: 'RootQueryType',
-        fields: {
-          name: {
-            type: GraphQLString,
-            resolve: () => 'name'
-          }
+  buildGraphQLSchema() {
+    var self = this;
+    if (this._schema) return this._schema;
+
+    var graphQlObj = new GraphQLObjectType({
+      name: self._name,
+      description: self._description,
+      fields: () => {
+        var schemaFields = {};
+        for (var fieldName in self._fields) {
+          let field = self._fields[fieldName];
+          let type = graphQLTypeFor(field.type);
+          schemaFields[fieldName] = {
+            description: field.description,
+            type: type,
+            resolve: field.resolve
+          };
         }
-      })
+        return schemaFields;
+      }
     });
 
-    var results = await execute(schema, {}, parsedAST);
-    var fields = results.data;
+    return this._schema = graphQlObj;
 
-    var cypherQuery = Object.keys(fields).map((field) => {
-      var string = "WITH ";
-      string += `${this._nodeName}.${field} as ${field}`;
-      return string;
-    });
-
-    return cypherQuery.join('\n');
+    function graphQLTypeFor(type) {
+      if (type == 'string') return GraphQLString;
+      if (type == self) return graphQlObj;
+    }
   }
+
+  async toCypher(queryString, nodeName) {
+
+    var ast = parse(queryString);
+    var schema = new GraphQLSchema({query: this.buildGraphQLSchema() });
+
+    let { isValid, errors } = validateDocument(schema, ast);
+
+    if (!isValid) {
+      throw Error(errors[0].message);
+    }
+
+    var result = await execute(schema, Object, ast);
+
+
+    const NODE_REGEX = /\bn\b/g;
+
+    let cypherQuery = [];
+    for (var fieldName of Object.keys(result.data)) {
+      var field = this._fields[fieldName];
+
+      var string = `WITH ${nodeName}\n`;
+      if (isPrimitive(field.type)) {
+        var srcField = buildSrc(field.srcField);
+        string += `${srcField} as ${fieldName}`;
+      } else {
+        var query = await field.resolve();
+        query = query.replace(NODE_REGEX, nodeName);
+        string += `MATCH ${query}`;
+      }
+      cypherQuery.push(string);
+    }
+    return cypherQuery.join('\n');
+
+
+    function buildSrc(src) {
+      let nodePlaceholders = src.match(NODE_REGEX);
+      if (nodePlaceholders && nodePlaceholders.length) {
+        return src.replace(NODE_REGEX, nodeName);
+      } else {
+        return `${nodeName}.${src}`;
+      }
+    }
+
+  }
+
+}
+
+const PRIMITIVES = [
+  'string', 'number'
+];
+
+function isPrimitive(type) {
+  return PRIMITIVES.includes(type);
 }
