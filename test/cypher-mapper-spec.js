@@ -60,13 +60,13 @@ describe('CypherMapper', () => {
   describe('#toCypher', () => {
     it('errors on an invalid query');
     it('expands out related types');
-    it('includes primitive fields', () => {
+    it('includes primitive fields', async () => {
       testMapper.expose('name', 'string', 'The name');
       testMapper._nodeName = 'n';
-      let result = testMapper.toCypher('{name}', result);
+      let result = await testMapper.toCypher('{name}');
       expect(result).to.be(`
       WITH n.name as name
-      `.replace(/\n/g, ''));
+      `.replace(/\n/g, '').trim());
     });
   });
 });

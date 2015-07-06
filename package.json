@@ -32,5 +32,8 @@
     "gulp-remember": "^0.3.0",
     "gulp-sourcemaps": "^1.5.2",
     "source-map-support": "^0.3.2"
+  },
+  "dependencies": {
+    "graphql": "^0.1.2"
   }
 }
