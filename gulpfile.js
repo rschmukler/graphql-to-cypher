@@ -23,7 +23,7 @@ gulp.task('build', function() {
 });
 
 gulp.task('watch', ['build'], function() {
-  var jsWatch = gulp.watch('src/**/*.js', ['build'])
+  var jsWatch = gulp.watch(['src/**/*.js', 'test/**/*.js'], ['test'])
     .on('change', checkRemoved('js'));
 
  function checkRemoved(name) {
