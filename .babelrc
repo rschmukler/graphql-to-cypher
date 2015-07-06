@@ -1,0 +1,7 @@
+{
+  "modules": "common",
+  "optional": [
+    "es6.destructuring", "es6.modules", "es6.parameters",
+    "es6.arrowFunctions"
+  ]
+}
