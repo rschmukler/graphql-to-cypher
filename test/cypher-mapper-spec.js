@@ -146,7 +146,6 @@ describe('CypherMapper', () => {
 
     it('handles an array of primitives');
     it('handles an array of related types', async () => {
-
       let Person = new CypherMapper('Person', 'A person');
 
       Person
@@ -158,6 +157,27 @@ describe('CypherMapper', () => {
       MATCH (n)-[:IS_FRIENDS_WITH]-(nfriends:Person)
       WITH { name: nfriends.name } as nfriends, n
       WITH { name: n.name, friends: COLLECT(nfriends) } as n
+      `);
+    });
+
+    it('handles deeply nested types', async () => {
+      let Person = new CypherMapper('Person', 'A person');
+      let Food = new CypherMapper('Food', 'A tasty treat');
+
+      Food.expose('name', 'string', 'The name of the food');
+
+      Person
+        .expose('name', 'string', 'The name of the person')
+        .query('favoriteFoods', [Food], 'The favorite foods of the person', '(n)-[:LIKES]->(favoriteFoods:Food)')
+        .query('friends', [Person], 'Friends of the person', '(n)-[:IS_FRIENDS_WITH]-(friends:Person)');
+
+      let result = await Person.toCypher('{ name, friends { name, favoriteFoods { name } }}', 'n');
+      expectQuery(result, `
+        MATCH (n)-[:IS_FRIENDS_WITH]-(nfriends:Person)
+        MATCH (nfriends)-[:LIKES]->(nfriendsfavoriteFoods:Food)
+        WITH { name: nfriendsfavoriteFoods.name } as nfriendsfavoriteFoods, nfriends, n
+        WITH { name: nfriends.name, favoriteFoods: COLLECT(nfriendsfavoriteFoods) } as nfriends, n
+        WITH { name: n.name, friends: COLLECT(nfriends) } as n
       `);
     });
   });

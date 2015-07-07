@@ -80,7 +80,7 @@ export default class CypherMapper {
       let arrayMode = Array.isArray(type);
       if (arrayMode) type = type[0];
       if (type == 'string') result = GraphQLString;
-      if (type == self) result = graphQlObj;
+      else if (type.buildGraphQLSchema) result = type.buildGraphQLSchema();
 
       return arrayMode && isPrimitive(type) ? new GraphQLList(result) : result;
     }
@@ -99,10 +99,11 @@ export default class CypherMapper {
 
     const NODE_REGEX = /\bn\b/g;
 
-    var result = await execute(schema, Object, ast);
+    var result = await execute(schema, {name: true, friends: { name: 'Test'}}, ast);
 
     var fields = this._fields;
     return await processFields(result.data, fields, nodeName, ctx);
+
 
     async function processFields(obj, fields, nodeName, ctx) {
       ctx.unshift(nodeName);
