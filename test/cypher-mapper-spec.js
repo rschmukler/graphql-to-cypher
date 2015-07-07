@@ -77,11 +77,9 @@ describe('CypherMapper', () => {
     it('adds itself to the fields map', () => {
       testMapper.query('favoriteFood', {}, 'Description', '');
       expect(testMapper._fields.favoriteFood).to.be.ok();
-      expect(testMapper._fields.favoriteFood).to.eql({
-        type: {},
-        query: '',
-        description: 'Description'
-      });
+      expect(testMapper._fields.favoriteFood).to.have.property('type');
+      expect(testMapper._fields.favoriteFood).to.have.property('description', 'Description');
+      expect(testMapper._fields.favoriteFood.resolve).to.be.a(Function);
     });
   });
 
@@ -118,20 +116,20 @@ describe('CypherMapper', () => {
     it('includes primitive fields', async () => {
       testMapper.expose('name', 'string', 'The name');
       let result = await testMapper.toCypher('{name}', 'n');
-      expect(result).to.be(`
-      WITH n.name as name
-      `.replace(/\n/g, '').trim());
+      expectQuery(result,`
+        WITH { name: n.name } as n
+      `);
     });
 
     it('handles alias fields', async () => {
       testMapper.expose('id(n) as id', 'number', 'The id');
       let result = await testMapper.toCypher('{id}', 'n');
-      expect(result).to.be(`
-      WITH id(n) as id
-      `.replace(/\n/g, '').trim());
+      expectQuery(result, `
+      WITH { id: id(n) } as n
+      `);
     });
 
-    it.only('expands out related types', async () => {
+    it('expands out related types', async () => {
       let Person = new CypherMapper('Person', 'A person');
 
       Person
@@ -140,10 +138,26 @@ describe('CypherMapper', () => {
 
       let result = await Person.toCypher('{ name, bestFriend { name }}', 'n');
       expectQuery(result, `
-      WITH (n)
       MATCH (n)-[:IS_BEST_FRIENDS_WITH]->(nbestFriend:Person)
-      WITH n, { name: nbestFriend.name } as nbestFriend
+      WITH { name: nbestFriend.name } as nbestFriend, n
       WITH { name: n.name, bestFriend: nbestFriend } as n
+      `);
+    });
+
+    it('handles an array of primitives');
+    it('handles an array of related types', async () => {
+
+      let Person = new CypherMapper('Person', 'A person');
+
+      Person
+        .expose('name', 'string', 'The name of the person')
+        .query('friends', [Person], 'Friends of the person', '(n)-[:IS_FRIENDS_WITH]-(friends:Person)');
+
+      let result = await Person.toCypher('{ name, friends { name }}', 'n');
+      expectQuery(result, `
+      MATCH (n)-[:IS_FRIENDS_WITH]-(nfriends:Person)
+      WITH { name: nfriends.name } as nfriends, n
+      WITH { name: n.name, friends: COLLECT(nfriends) } as n
       `);
     });
   });

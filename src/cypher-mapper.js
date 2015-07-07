@@ -6,7 +6,8 @@ import {
   graphql,
   GraphQLSchema,
   GraphQLObjectType,
-  GraphQLString
+  GraphQLString,
+  GraphQLList
 } from 'graphql';
 
 export default class CypherMapper {
@@ -37,11 +38,15 @@ export default class CypherMapper {
   }
 
   query(name, type, description, query) {
+    var arrayMode = Array.isArray(type);
+    if (arrayMode) type = type[0];
+
     this._fields[name] = {
       type,
       description
     };
     this._fields[name].resolve = () => { return Promise.resolve(query); };
+    this._fields[name].arrayMode = arrayMode;
     return this;
   }
 
@@ -60,7 +65,8 @@ export default class CypherMapper {
           schemaFields[fieldName] = {
             description: field.description,
             type: type,
-            resolve: field.resolve
+            resolve: field.resolve,
+            arrayMode: field.arrayMode
           };
         }
         return schemaFields;
@@ -70,54 +76,75 @@ export default class CypherMapper {
     return this._schema = graphQlObj;
 
     function graphQLTypeFor(type) {
-      if (type == 'string') return GraphQLString;
-      if (type == self) return graphQlObj;
+      let result;
+      let arrayMode = Array.isArray(type);
+      if (arrayMode) type = type[0];
+      if (type == 'string') result = GraphQLString;
+      if (type == self) result = graphQlObj;
+
+      return arrayMode && isPrimitive(type) ? new GraphQLList(result) : result;
     }
   }
 
-  async toCypher(queryString, nodeName) {
-
+  async toCypher(queryString, nodeName = 'n', ctx = []) {
     var ast = parse(queryString);
     var schema = new GraphQLSchema({query: this.buildGraphQLSchema() });
 
     let { isValid, errors } = validateDocument(schema, ast);
 
+
     if (!isValid) {
       throw Error(errors[0].message);
     }
 
-    var result = await execute(schema, Object, ast);
-
-
     const NODE_REGEX = /\bn\b/g;
 
-    let cypherQuery = [];
-    for (var fieldName of Object.keys(result.data)) {
-      var field = this._fields[fieldName];
+    var result = await execute(schema, Object, ast);
 
-      var string = `WITH ${nodeName}\n`;
-      if (isPrimitive(field.type)) {
-        var srcField = buildSrc(field.srcField);
-        string += `${srcField} as ${fieldName}`;
-      } else {
-        var query = await field.resolve();
-        query = query.replace(NODE_REGEX, nodeName);
-        string += `MATCH ${query}`;
+    var fields = this._fields;
+    return await processFields(result.data, fields, nodeName, ctx);
+
+    async function processFields(obj, fields, nodeName, ctx) {
+      ctx.unshift(nodeName);
+      let advancedQueries = [];
+      let primitiveFields = [];
+      let tmpString;
+      for (var fieldName of Object.keys(obj)) {
+        var field = fields[fieldName];
+        let srcField;
+        if (!isPrimitive(field.type)) {
+          srcField = nodeName + fieldName;
+          var query = await field.resolve();
+          query = query.replace(NODE_REGEX, nodeName).replace(variableRegex(fieldName), srcField);
+          tmpString = `MATCH ${query}`;
+          advancedQueries.push(tmpString);
+          let innerQuery = await processFields(obj[fieldName], fields[fieldName].type._fields, srcField, ctx);
+          advancedQueries.push(innerQuery);
+        } else {
+          srcField = buildSrc(field.srcField);
+        }
+        if (field.arrayMode) srcField = `COLLECT(${srcField})`;
+        tmpString = `${fieldName}: ${srcField}`;
+        primitiveFields.push(tmpString);
       }
-      cypherQuery.push(string);
-    }
-    return cypherQuery.join('\n');
+      let queryStr = advancedQueries.join('\n') + '\n';
+      queryStr += `WITH { ${primitiveFields.join(', ')} } as ${ctx.join(', ')}`;
+      ctx.shift();
+      return queryStr;
 
-
-    function buildSrc(src) {
-      let nodePlaceholders = src.match(NODE_REGEX);
-      if (nodePlaceholders && nodePlaceholders.length) {
-        return src.replace(NODE_REGEX, nodeName);
-      } else {
-        return `${nodeName}.${src}`;
+      function buildSrc(src) {
+        let nodePlaceholders = src.match(NODE_REGEX);
+        if (nodePlaceholders && nodePlaceholders.length) {
+          return src.replace(NODE_REGEX, nodeName);
+        } else {
+          return `${nodeName}.${src}`;
+        }
       }
     }
 
+    function variableRegex(variableName) {
+      return new RegExp('\\b' + variableName + '\\b', 'g');
+    }
   }
 
 }
