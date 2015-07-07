@@ -71,15 +71,20 @@ describe('CypherMapper', () => {
     it('requires a description');
     it('requires a cypher-query');
     it('returns itself', () => {
-      expect(testMapper.query('favoriteFood', {}, 'Description', '')).to.be(testMapper);
+      expect(testMapper.query('favoriteFood', {}, 'Description', 'favoriteFood')).to.be(testMapper);
     });
 
     it('adds itself to the fields map', () => {
-      testMapper.query('favoriteFood', {}, 'Description', '');
+      testMapper.query('favoriteFood', {}, 'Description', 'favoriteFood');
       expect(testMapper._fields.favoriteFood).to.be.ok();
       expect(testMapper._fields.favoriteFood).to.have.property('type');
       expect(testMapper._fields.favoriteFood).to.have.property('description', 'Description');
       expect(testMapper._fields.favoriteFood.resolve).to.be.a(Function);
+    });
+
+    it('errors when a query misses a variable', () => {
+      var missingVar = () => { testMapper.query('favoriteFood', {}, 'Description', ''); };
+      expect(missingVar).to.throwError(/Query "favoriteFood" did not provide a variable named "favoriteFood" in the neo4j query/);
     });
   });
 
@@ -159,6 +164,7 @@ describe('CypherMapper', () => {
       WITH { name: n.name, friends: COLLECT(nfriends) } as n
       `);
     });
+
 
     it('handles deeply nested types', async () => {
       let Person = new CypherMapper('Person', 'A person');

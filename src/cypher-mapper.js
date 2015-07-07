@@ -41,6 +41,11 @@ export default class CypherMapper {
     var arrayMode = Array.isArray(type);
     if (arrayMode) type = type[0];
 
+    let containsVariable = (new RegExp(name)).test(query);
+    if (!containsVariable) {
+      throw Error(`Query "${name}" did not provide a variable named "${name}" in the neo4j query`);
+    }
+
     this._fields[name] = {
       type,
       description
