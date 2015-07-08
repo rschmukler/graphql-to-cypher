@@ -36,14 +36,24 @@ describe('CypherMapper', () => {
   });
 
   describe('#expose', () => {
-    it('requires a name');
-    it('requires a type');
+    it('requires a name', () => {
+      var noName = () => { testMapper.expose(); };
+      expect(noName).to.throwError(/Name is required for a field/);
+    });
+    it('requires a type', () => {
+      var noType = () => { testMapper.expose('id'); };
+      expect(noType).to.throwError(/Type is required for field "id"/);
+    });
     it('requires a description', () => {
       var noDescription = () => { testMapper.expose('id', 'number'); };
       expect(noDescription).to.throwError(/Description is required for field "id"/);
     });
 
-    it('returns itself');
+    it('returns itself', () => {
+      let result = testMapper.expose('test', 'string', 'test');
+      expect(result).to.be(testMapper);
+    });
+
     it('adds it to the field map', () => {
       testMapper.expose('name', 'string', 'The name');
       expect(testMapper._fields).to.have.property('name');
@@ -65,17 +75,29 @@ describe('CypherMapper', () => {
     });
   });
 
-  describe('#query', () => {
-    it('requires a name');
-    it('requires a type');
-    it('requires a description');
-    it('requires a cypher-query');
+  describe('#relation', () => {
+    it('requires a name', () => {
+      var noName = () => testMapper.relation();
+      expect(noName).to.throwError(/Name is required for a relation/);
+    });
+    it('requires a type', () => {
+      var noType = () => testMapper.relation('friends');
+      expect(noType).to.throwError(/Type not specified for relation "friends"/);
+    });
+    it('requires a description', () => {
+      var noDescription = () => testMapper.relation('friends', {});
+      expect(noDescription).to.throwError(/Description not specified for relation "friends"/);
+    });
+    it('requires a cypher-query', () => {
+      var noQuery = () => testMapper.relation('friends', {}, 'test');
+      expect(noQuery).to.throwError(/Cypher query not specified for relation "friends"/);
+    });
     it('returns itself', () => {
-      expect(testMapper.query('favoriteFood', {}, 'Description', 'favoriteFood')).to.be(testMapper);
+      expect(testMapper.relation('favoriteFood', {}, 'Description', 'favoriteFood')).to.be(testMapper);
     });
 
     it('adds itself to the fields map', () => {
-      testMapper.query('favoriteFood', {}, 'Description', 'favoriteFood');
+      testMapper.relation('favoriteFood', {}, 'Description', 'favoriteFood');
       expect(testMapper._fields.favoriteFood).to.be.ok();
       expect(testMapper._fields.favoriteFood).to.have.property('type');
       expect(testMapper._fields.favoriteFood).to.have.property('description', 'Description');
@@ -83,8 +105,8 @@ describe('CypherMapper', () => {
     });
 
     it('errors when a query misses a variable', () => {
-      var missingVar = () => { testMapper.query('favoriteFood', {}, 'Description', ''); };
-      expect(missingVar).to.throwError(/Query "favoriteFood" did not provide a variable named "favoriteFood" in the neo4j query/);
+      var missingVar = () => { testMapper.relation('favoriteFood', {}, 'Description', '()'); };
+      expect(missingVar).to.throwError(/Relation "favoriteFood" did not provide a variable named "favoriteFood" in the neo4j query/);
     });
   });
 
@@ -93,7 +115,7 @@ describe('CypherMapper', () => {
     let result, fields;
     beforeEach(() => {
       testMapper.expose('name', 'string', 'Name');
-      testMapper.query('link', testMapper, 'Link', '(n)-[:LINK]->(link)');
+      testMapper.relation('link', testMapper, 'Link', '(n)-[:LINK]->(link)');
       result = testMapper.buildGraphQLSchema();
       fields = result._typeConfig.fields();
     });
@@ -117,7 +139,17 @@ describe('CypherMapper', () => {
   });
 
   describe('#toCypher', () => {
-    it('errors on an invalid query');
+    it('errors on an invalid query', (done) => {
+      testMapper.toCypher('{doesntExist}', 'n').then(undefined, (err) => {
+        try {
+          expect(err.message).to.match(/Cannot query field doesntExist on Test/);
+          done();
+        } catch(e) {
+          done(e);
+        }
+      });
+    });
+
     it('includes primitive fields', async () => {
       testMapper.expose('name', 'string', 'The name');
       let result = await testMapper.toCypher('{name}', 'n');
@@ -139,7 +171,7 @@ describe('CypherMapper', () => {
 
       Person
         .expose('name', 'string', 'The name of the person')
-        .query('bestFriend', Person, 'Friends of the person', '(n)-[:IS_BEST_FRIENDS_WITH]->(bestFriend:Person)');
+        .relation('bestFriend', Person, 'Friends of the person', '(n)-[:IS_BEST_FRIENDS_WITH]->(bestFriend:Person)');
 
       let result = await Person.toCypher('{ name, bestFriend { name }}', 'n');
       expectQuery(result, `
@@ -149,13 +181,12 @@ describe('CypherMapper', () => {
       `);
     });
 
-    it('handles an array of primitives');
     it('handles an array of related types', async () => {
       let Person = new CypherMapper('Person', 'A person');
 
       Person
         .expose('name', 'string', 'The name of the person')
-        .query('friends', [Person], 'Friends of the person', '(n)-[:IS_FRIENDS_WITH]-(friends:Person)');
+        .relation('friends', [Person], 'Friends of the person', '(n)-[:IS_FRIENDS_WITH]-(friends:Person)');
 
       let result = await Person.toCypher('{ name, friends { name }}', 'n');
       expectQuery(result, `
@@ -174,8 +205,8 @@ describe('CypherMapper', () => {
 
       Person
         .expose('name', 'string', 'The name of the person')
-        .query('favoriteFoods', [Food], 'The favorite foods of the person', '(n)-[:LIKES]->(favoriteFoods:Food)')
-        .query('friends', [Person], 'Friends of the person', '(n)-[:IS_FRIENDS_WITH]-(friends:Person)');
+        .relation('favoriteFoods', [Food], 'The favorite foods of the person', '(n)-[:LIKES]->(favoriteFoods:Food)')
+        .relation('friends', [Person], 'Friends of the person', '(n)-[:IS_FRIENDS_WITH]-(friends:Person)');
 
       let result = await Person.toCypher('{ name, friends { name, favoriteFoods { name } }}', 'n');
       expectQuery(result, `

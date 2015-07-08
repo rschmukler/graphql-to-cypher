@@ -20,6 +20,8 @@ export default class CypherMapper {
   }
 
   expose(name, type, description) {
+    if (!name) throw Error(`Name is required for a field`);
+    if (!type) throw Error(`Type is required for field "${name}"`);
     if (!description) throw Error(`Description is required for field "${name}"`);
     let aliases = name.split('as');
     let fieldName, srcField;
@@ -37,13 +39,18 @@ export default class CypherMapper {
     return this;
   }
 
-  query(name, type, description, query) {
+  relation(name, type, description, query) {
+    if (!name) throw Error('Name is required for a relation');
+    if (!type) throw Error(`Type not specified for relation "${name}"`);
+    if (!description) throw Error(`Description not specified for relation "${name}"`);
+    if (!query) throw Error(`Cypher query not specified for relation "${name}"`);
+
     var arrayMode = Array.isArray(type);
     if (arrayMode) type = type[0];
 
     let containsVariable = (new RegExp(name)).test(query);
     if (!containsVariable) {
-      throw Error(`Query "${name}" did not provide a variable named "${name}" in the neo4j query`);
+      throw Error(`Relation "${name}" did not provide a variable named "${name}" in the neo4j query`);
     }
 
     this._fields[name] = {
