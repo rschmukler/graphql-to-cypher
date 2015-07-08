@@ -2,6 +2,8 @@ import { parse } from 'graphql/lib/language/parser';
 import { execute } from 'graphql/lib/executor/executor';
 import { validateDocument } from 'graphql/lib/validator';
 
+import { visit } from 'graphql/lib/language/visitor';
+
 import {
   graphql,
   GraphQLSchema,
@@ -10,7 +12,79 @@ import {
   GraphQLList
 } from 'graphql';
 
-export default class CypherMapper {
+const NODE_REGEX = /\bn\b/g;
+
+export default class Node {
+  constructor({name, fields}) {
+    this.name = name;
+    this.fields = fields;
+  }
+  buildFields() {
+    if (this._fields) return this._fields;
+    let fields = this.fields();
+
+    for (var fieldName in fields) {
+      fields[fieldName] = parseField(fieldName, fields[fieldName]);
+    }
+    return this._fields = fields;
+
+    function parseField(fieldName, field) {
+      if (typeof field == 'string') {
+        return {
+          srcField: toVar(fieldName),
+          outField: fieldName,
+          type: field
+        };
+      } else {
+        return {
+          srcField: toVar(field.srcField || fieldName),
+          outField: field.outField || fieldName,
+          type: field.type
+        };
+      }
+    }
+  }
+  buildCypher(ast, varName) {
+    let name = this.name;
+    let fields = this.buildFields();
+    let cypher = '';
+    let newAst, result;
+
+    let simpleFields = [];
+
+    visit(ast, {
+      Field: {
+        enter({ name: {value: fieldName }}) {
+          let field = fields[fieldName];
+          if (!field) throw Error(`Attempted to access undefined field "${fieldName}" on node ${name}`);
+          simpleFields.push(field);
+        }
+      }
+    });
+
+    let simpleFieldCypher = simpleFields.map(simpleStr).join(',');
+    cypher += `WITH { ${simpleFieldCypher} } as ${varName}`;
+
+    return [cypher, newAst, result];
+
+    function simpleStr({srcField, outField}) {
+      return `${outField}: ${replaceVar(srcField, varName)}`;
+    }
+  }
+}
+
+function toVar(field) {
+  if (!NODE_REGEX.test(field)) {
+    return 'n.' + field;
+  }
+  return field;
+}
+
+function replaceVar(field, newName) {
+  return field.replace(NODE_REGEX, newName);
+}
+
+class OldNode {
   constructor(name, description) {
     if (!name) throw new Error('Name is required');
     if (!description) throw new Error('Description is required');
@@ -62,9 +136,9 @@ export default class CypherMapper {
     return this;
   }
 
-  buildGraphQLSchema() {
+  buildCypherSchema() {
     var self = this;
-    if (this._schema) return this._schema;
+    if (this._cypherSchema) return this._cypherSchema;
 
     var graphQlObj = new GraphQLObjectType({
       name: self._name,
@@ -85,14 +159,14 @@ export default class CypherMapper {
       }
     });
 
-    return this._schema = graphQlObj;
+    return this._cypherSchema = graphQlObj;
 
     function graphQLTypeFor(type) {
       let result;
       let arrayMode = Array.isArray(type);
       if (arrayMode) type = type[0];
       if (type == 'string') result = GraphQLString;
-      else if (type.buildGraphQLSchema) result = type.buildGraphQLSchema();
+      else if (type.buildCypherSchema) result = type.buildCypherSchema();
 
       return arrayMode && isPrimitive(type) ? new GraphQLList(result) : result;
     }
@@ -100,7 +174,7 @@ export default class CypherMapper {
 
   async toCypher(queryString, nodeName = 'n', ctx = []) {
     var ast = parse(queryString);
-    var schema = new GraphQLSchema({query: this.buildGraphQLSchema() });
+    var schema = new GraphQLSchema({query: this.buildCypherSchema() });
 
     let { isValid, errors } = validateDocument(schema, ast);
 
@@ -111,10 +185,10 @@ export default class CypherMapper {
 
     const NODE_REGEX = /\bn\b/g;
 
-    var result = await execute(schema, {name: true, friends: { name: 'Test'}}, ast);
+    var result = await execute(schema, null, ast);
 
     var fields = this._fields;
-    return await processFields(result.data, fields, nodeName, ctx);
+    return processFields(result.data, fields, nodeName, ctx);
 
 
     async function processFields(obj, fields, nodeName, ctx) {

@@ -1,3 +1,5 @@
-import CypherMapper from './cypher-mapper';
+import Node from './node';
+import Executor from './executor';
+import Query from './query';
 
-export { CypherMapper };
+export { Node, Executor, Query };
