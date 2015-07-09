@@ -11,6 +11,8 @@ var babel = require('gulp-babel');
 var plumb = require('gulp-plumber');
 var mocha = require('gulp-mocha');
 
+gulp.task('default', ['watch']);
+
 
 gulp.task('test', ['build'], function() {
   return gulp.src('test/**/*.js')

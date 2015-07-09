@@ -36,7 +36,7 @@ export default class Node {
           outField: fieldName,
           type: field
         };
-      } else if (field.type instanceof Node) {
+      } else if (isNode(field.type)) {
         if (!field.query) throw Error(`Missing query on relation field "${fieldName}" on Node "${self.name}"`);
         return {
           type: field.type,
@@ -54,31 +54,78 @@ export default class Node {
     }
   }
   buildCypher(ast, ctx) {
-    let varName = Array.isArray(ctx) ? ctx.shift() : ctx;
+    if (!Array.isArray(ctx)) ctx = [ctx];
+    let varName = ctx[0];
     let name = this.name;
-    let fields = this.buildFields();
+    let possibleFields = this.buildFields();
     let cypher = '';
     let newAst, result;
 
-    let results = [];
+    let seenFields = [];
+    let nestedResults = [];
 
     visit(ast, {
       Field: {
-        enter({ name: {value: fieldName }}) {
-          let field = fields[fieldName];
+        enter(node) {
+          let fieldName = node.name.value;
+          if (node._alreadyProcessing) return;
+
+          let field = possibleFields[fieldName];
           if (!field) throw Error(`Attempted to access undefined field "${fieldName}" on node ${name}`);
-          results.push(field);
+
+          if (isNode(field.type)) {
+            node._alreadyProcessing = true;
+            let nestedVarName = varName + field.srcField;
+            ctx.unshift(nestedVarName);
+            let [cypher] = typeForField(field).buildCypher(node, ctx);
+            delete node._alreadyProcessing;
+            seenFields.push(field);
+            nestedResults.push(cypher);
+            return false;
+          }
+          seenFields.push(field);
         }
       }
     });
 
-    let resultsCypher = results.reverse().map(handleField).join(', ');
-    cypher += `WITH { ${resultsCypher} } as ${varName}`;
+    let resultsFields = [];
+    let extraQueries = [];
+
+    seenFields.forEach(handleField);
+
+    cypher += arrayToStr(extraQueries);
+    cypher += arrayToStr(nestedResults);
+    cypher += `WITH { ${resultsFields.join(', ')} } as ${ctx.join(', ')}`;
+    ctx.shift();
 
     return [cypher, newAst, result];
 
-    function handleField({type, srcField, outField}) {
-      return `${outField}: ${replaceVar(srcField, varName)}`;
+    function handleField(field) {
+      addFieldToResults(field);
+      addAdditionalQueries(field);
+    }
+
+    function addAdditionalQueries({query, srcField, outField}) {
+      if (!query) return;
+      query = `MATCH ${query}`;
+      query = query.replace(srcField, varName + srcField);
+      query = replaceVar(query, varName);
+      extraQueries.push(query);
+    }
+
+    function addFieldToResults({type, srcField, outField}) {
+      let nested = isNode(type);
+      let replaceWith;
+      if (nested) {
+        replaceWith = varName + srcField;
+      } else {
+        replaceWith = replaceVar(srcField, varName);
+      }
+
+      if (isArray(type)) {
+        replaceWith = `COLLECT(${replaceWith})`;
+      }
+      resultsFields.push(`${outField}: ${replaceWith}`);
     }
   }
 }
@@ -94,10 +141,26 @@ function replaceVar(field, newName) {
   return field.replace(NODE_REGEX, newName);
 }
 
+function arrayToStr(arr) {
+  return arr.join('\n') + (arr.length ? '\n' : '');
+}
+
+function isNode(type) {
+  return type instanceof Node || type[0] instanceof Node;
+}
+
 const PRIMITIVES = [
   'string', 'number'
 ];
 
+function typeForField({type}) {
+  return isArray(type) ? type[0] : type;
+}
+
 function isPrimitive(type) {
   return PRIMITIVES.includes(type);
+}
+
+function isArray(type) {
+  return Array.isArray(type);
 }
