@@ -41,7 +41,29 @@ describe.only('Node', () => {
       expect(cypher).to.equal('WITH { id: id(n) } as n');
     });
 
-    it('handles single nodes')
+    it('handles single nodes', () => {
+      let Person = new Node({
+        name: 'Person',
+        description: 'Test',
+        fields: () => ({
+          name: {
+            type: 'string',
+            srcField: 'name'
+          },
+          onlyFriend: {
+            type: Person,
+            query: '(n)-[:IS_ONLY_FRIENDS_WITH]-(onlyFriend:Person)'
+          }
+        })
+      });
+      let ast = parse('{ onlyFriend { name } }');
+      let [cypher, newAst, ret] = Person.buildCypher(ast, 'n');
+      expectCypher(cypher, `
+        MATCH (n)-[:IS_ONLY_FRIENDS_WITH]->(nonlyFriend:Person)
+        WITH { name: nonlyFriend.name } as nonlyFriend, n
+        WITH { name: n.name, onlyFriend: nonlyFriend } as n
+      `);
+    });
 //   it('expands out related types', async () => {
 //     let Person = new Node('Person', 'A person');
 
@@ -270,10 +292,10 @@ describe.only('Node', () => {
 //   });
 // });
 
-// function expectQuery(result, query) {
-//   expect(normalize(result)).to.be(normalize(query));
+function expectCypher(result, query) {
+  expect(normalize(result)).to.be(normalize(query));
 
-//   function normalize(str) {
-//     return str.replace(/\n/g, ' ').replace(/ +/g, ' ').trim();
-//   }
-// }
+  function normalize(str) {
+    return str.replace(/\n/g, ' ').replace(/ +/g, ' ').trim();
+  }
+}
