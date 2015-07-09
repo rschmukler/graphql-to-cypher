@@ -37,12 +37,12 @@ export default class Node {
           type: field
         };
       } else if (isNode(field.type)) {
-        if (!field.query) throw Error(`Missing query on relation field "${fieldName}" on Node "${self.name}"`);
+        if (!field.relation) throw Error(`Missing relation query on relation field "${fieldName}" on Node "${self.name}"`);
         return {
           type: field.type,
           outField: field.outField || fieldName,
           srcField: field.srcField || fieldName,
-          query: field.query
+          relation: field.relation
         };
       } else {
         return {
@@ -102,15 +102,15 @@ export default class Node {
 
     function handleField(field) {
       addFieldToResults(field);
-      addAdditionalQueries(field);
+      addAdditionalRelations(field);
     }
 
-    function addAdditionalQueries({query, srcField, outField}) {
-      if (!query) return;
-      query = `MATCH ${query}`;
-      query = query.replace(srcField, varName + srcField);
-      query = replaceVar(query, varName);
-      extraQueries.push(query);
+    function addAdditionalRelations({relation, srcField, outField}) {
+      if (!relation) return;
+      relation = `MATCH ${relation}`;
+      relation = relation.replace(srcField, varName + srcField);
+      relation = replaceVar(relation, varName);
+      extraQueries.push(relation);
     }
 
     function addFieldToResults({type, srcField, outField}) {

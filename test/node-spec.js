@@ -52,7 +52,7 @@ describe.only('Node', () => {
           },
           onlyFriend: {
             type: Person,
-            query: '(n)-[:IS_ONLY_FRIENDS_WITH]-(onlyFriend:Person)'
+            relation: '(n)-[:IS_ONLY_FRIENDS_WITH]-(onlyFriend:Person)'
           }
         })
       });
@@ -65,7 +65,7 @@ describe.only('Node', () => {
       `);
     });
 
-    it('handles an array of related types', async () => {
+    it('handles an array of related types', () => {
       let Person = new Node({
         name: 'Person',
         description: 'Test',
@@ -76,7 +76,7 @@ describe.only('Node', () => {
           },
           friends: {
             type: [ Person ],
-            query: '(n)-[:IS_FRIENDS_WITH]-(friends:Person)'
+            relation: '(n)-[:IS_FRIENDS_WITH]-(friends:Person)'
           }
         })
       });
@@ -88,6 +88,27 @@ describe.only('Node', () => {
         WITH { name: nfriends.name } as nfriends, n
         WITH { name: n.name, friends: COLLECT(nfriends) } as n
       `);
+    });
+
+    it('handles variable passing', () => {
+      let Person = new Node({
+        name: 'Person',
+        description: 'Test',
+        fields: () => ({
+          name: {
+            type: 'string',
+            srcField: 'name'
+          },
+          friends: {
+            type: [ Person ],
+            relation: '(n)-[:IS_FRIENDS_WITH]-(friends:Person)'
+          },
+          isOlderThan: {
+            type: Boolean,
+            query: 'n.age > { age }',
+          }
+        })
+      });
     });
 
     it('handles deeply nested types', () => {
@@ -106,11 +127,11 @@ describe.only('Node', () => {
           },
           friends: {
             type: [ Person ],
-            query: '(n)-[:IS_FRIENDS_WITH]-(friends:Person)'
+            relation: '(n)-[:IS_FRIENDS_WITH]-(friends:Person)'
           },
           favoriteFoods: {
             type: [ Food ],
-            query: '(n)-[:LIKES]->(favoriteFoods:Food)'
+            relation: '(n)-[:LIKES]->(favoriteFoods:Food)'
           }
         })
       });
