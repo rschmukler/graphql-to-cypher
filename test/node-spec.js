@@ -10,7 +10,7 @@ import {
   Visitor
 } from 'graphql';
 
-describe.only('Node', () => {
+describe('Node', () => {
   describe('#buildCypher', () => {
     it('handles a simple field', () => {
       let node = new Node({
@@ -31,7 +31,7 @@ describe.only('Node', () => {
         description: 'Test',
         fields: () => ({
           id: {
-            type: 'number',
+            type: 'int',
             srcField: 'id(n)'
           }
         })
@@ -46,10 +46,7 @@ describe.only('Node', () => {
         name: 'Person',
         description: 'Test',
         fields: () => ({
-          name: {
-            type: 'string',
-            srcField: 'name'
-          },
+          name: 'string',
           onlyFriend: {
             type: Person,
             relation: '(n)-[:IS_ONLY_FRIENDS_WITH]-(onlyFriend:Person)'
@@ -90,24 +87,61 @@ describe.only('Node', () => {
       `);
     });
 
-    it('handles variable passing', () => {
-      let Person = new Node({
-        name: 'Person',
-        description: 'Test',
-        fields: () => ({
-          name: {
-            type: 'string',
-            srcField: 'name'
-          },
-          friends: {
-            type: [ Person ],
-            relation: '(n)-[:IS_FRIENDS_WITH]-(friends:Person)'
-          },
-          isOlderThan: {
-            type: Boolean,
-            query: 'n.age > { age }',
-          }
-        })
+    describe('variable parsing', () => {
+      it('errors if a primitive field does not include a variable', () => {
+        let makeBadModel = () => {
+          let Person = new Node({
+            name: 'Person',
+            description: 'Test',
+            fields: () => ({
+              name: {
+                type: 'string',
+                srcField: 'name'
+              },
+              friends: {
+                type: [ Person ],
+                relation: '(n)-[:IS_FRIENDS_WITH]-(friends:Person)'
+              },
+              isOlderThan: {
+                type: 'boolean',
+                srcField: 'n.age > { age }'
+              }
+            })
+          });
+          Person.buildFields();
+        };
+        expect(makeBadModel).to.throwError(/Missing argument "age" for field "isOlderThan"/);
+      });
+
+      it('handles variable passing', () => {
+        let Person = new Node({
+          name: 'Person',
+          description: 'Test',
+          fields: () => ({
+            name: {
+              type: 'string',
+              srcField: 'name'
+            },
+            friends: {
+              type: [ Person ],
+              relation: '(n)-[:IS_FRIENDS_WITH]-(friends:Person)'
+            },
+            isOlderThan: {
+              type: Boolean,
+              srcField: 'n.age > { age }',
+              args: {
+                age: {
+                  type: 'int',
+                  defaultValue: 20
+                }
+              }
+            }
+          })
+        });
+        let graphQl = '{ name,  isOlderThan(age: 40)}';
+        let ast = parse(graphQl);
+        let [cypher, newAst, ret] = Person.buildCypher(ast, 'n');
+        expectCypher(cypher, `WITH { name: n.name, isOlderThan: n.age > { age } } as n`);
       });
     });
 

@@ -1,3 +1,4 @@
+import extend from 'extend';
 import { parse } from 'graphql/lib/language/parser';
 import { execute } from 'graphql/lib/executor/executor';
 import { validateDocument } from 'graphql/lib/validator';
@@ -12,8 +13,6 @@ import {
   GraphQLList
 } from 'graphql';
 
-const NODE_REGEX = /\bn\b/g;
-
 export default class Node {
   constructor({name, fields}) {
     this.name = name;
@@ -25,31 +24,35 @@ export default class Node {
     let fields = this.fields();
 
     for (var fieldName in fields) {
-      fields[fieldName] = parseField(fieldName, fields[fieldName]);
+      fields[fieldName] = parseDefinition(fieldName, fields[fieldName]);
     }
     return this._fields = fields;
 
-    function parseField(fieldName, field) {
-      if (typeof field == 'string') {
-        return {
-          srcField: toVar(fieldName),
-          outField: fieldName,
-          type: field
-        };
-      } else if (isNode(field.type)) {
-        if (!field.relation) throw Error(`Missing relation query on relation field "${fieldName}" on Node "${self.name}"`);
-        return {
-          type: field.type,
-          outField: field.outField || fieldName,
-          srcField: field.srcField || fieldName,
-          relation: field.relation
-        };
-      } else {
-        return {
-          srcField: toVar(field.srcField),
-          outField: field.outField || fieldName,
-          type: field.type
-        };
+    function parseDefinition(fieldName, fieldDefinition) {
+      let result = {
+        srcField: normalizeField(fieldDefinition.srcField || fieldName),
+        outField: fieldDefinition.outField || fieldName,
+        type: fieldDefinition.type
+      };
+      if (typeof fieldDefinition == 'string') {
+        return extend(result, { type: fieldDefinition });
+      } else if (isNode(fieldDefinition.type)) {
+        if (!fieldDefinition.relation) throw Error(`Missing relation query on relation field "${fieldName}" on Node "${self.name}"`);
+        extend(result, {
+          srcField: fieldDefinition.srcField || fieldName,
+          relation: fieldDefinition.relation
+        });
+      }
+      ensureArgs();
+      return result;
+
+      function ensureArgs() {
+        fieldDefinition.args = fieldDefinition.args || {};
+        let vars = getVariablesFromCypher(result.srcField);
+        vars.forEach( varName => {
+          if (!fieldDefinition.args[varName])
+            throw Error(`Missing argument "${varName}" for field "${fieldName}"`);
+        });
       }
     }
   }
@@ -130,15 +133,25 @@ export default class Node {
   }
 }
 
-function toVar(field) {
-  if (!NODE_REGEX.test(field)) {
+function nodeRegex({global} = {}) {
+  if (global) global = 'g';
+  return new RegExp(/\bn\b/, global);
+}
+
+function normalizeField(field) {
+  if (!nodeRegex().test(field)) {
     return 'n.' + field;
   }
   return field;
 }
 
-function replaceVar(field, newName) {
-  return field.replace(NODE_REGEX, newName);
+function replaceVar(str, oldName, newName) {
+  if (!newName) {
+    newName = oldName;
+    oldName = 'n';
+  }
+  let regex = new RegExp(`\\b${oldName}\\b`,'g');
+  return str.replace(regex, newName);
 }
 
 function arrayToStr(arr) {
@@ -150,7 +163,7 @@ function isNode(type) {
 }
 
 const PRIMITIVES = [
-  'string', 'number'
+  'string', 'int', 'float', 'boolean'
 ];
 
 function typeForField({type}) {
@@ -163,4 +176,12 @@ function isPrimitive(type) {
 
 function isArray(type) {
   return Array.isArray(type);
+}
+
+function getVariablesFromCypher(cypher) {
+  let varRegex = /\{\s*(\w+)\s*\}/g;
+  let vars = cypher.match(varRegex);
+
+  if (!vars) return [];
+  return vars.map( x => x.replace(/\{|\}/g, '').trim());
 }
