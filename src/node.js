@@ -30,17 +30,19 @@ export default class Node {
 
     function parseDefinition(fieldName, fieldDefinition) {
       let result = {
+        arrayMode: isArray(fieldDefinition.type),
         srcField: normalizeField(fieldDefinition.srcField || fieldName),
         outField: fieldDefinition.outField || fieldName,
-        type: fieldDefinition.type
+        type: fieldDefinition.type,
+        relation: fieldDefinition.relation,
+        clause: fieldDefinition.clause
       };
       if (typeof fieldDefinition == 'string') {
         return extend(result, { type: fieldDefinition });
       } else if (isNode(fieldDefinition.type)) {
         if (!fieldDefinition.relation) throw Error(`Missing relation query on relation field "${fieldName}" on Node "${self.name}"`);
         extend(result, {
-          srcField: fieldDefinition.srcField || fieldName,
-          relation: fieldDefinition.relation
+          srcField: fieldDefinition.srcField || fieldName
         });
       }
       ensureArgs();
@@ -78,7 +80,7 @@ export default class Node {
 
           if (isNode(field.type)) {
             node._alreadyProcessing = true;
-            let nestedVarName = varName + field.srcField;
+            let nestedVarName = ctx.length > 1 ? varName + field.srcField : field.srcField;
             ctx.unshift(nestedVarName);
             let [cypher] = typeForField(field).buildCypher(node, ctx);
             delete node._alreadyProcessing;
@@ -104,31 +106,44 @@ export default class Node {
     return [cypher, newAst, result];
 
     function handleField(field) {
+      field = extend(true, {}, field);
+      namespaceVars(field);
       addFieldToResults(field);
       addAdditionalRelations(field);
+    }
+
+    function namespaceVars(field) {
+      let propsWithPossibleVars = ['srcField', 'relation', 'clause'];
+      propsWithPossibleVars.forEach(prop => {
+        if (field[prop]) {
+          field[prop] = field[prop].replace(/(?:\(|\[|^)(\w+)/g, (str,placeholderVar, index) => {
+            let replaceWith;
+            if (placeholderVar == 'n') {
+              replaceWith = varName;
+            } else if (ctx.length > 1) {
+              replaceWith = varName + placeholderVar;
+            } else {
+              replaceWith = placeholderVar;
+            }
+            let res = str.replace(placeholderVar, replaceWith);
+            return res;
+          });
+        }
+      });
     }
 
     function addAdditionalRelations({relation, srcField, outField}) {
       if (!relation) return;
       relation = `MATCH ${relation}`;
-      relation = relation.replace(srcField, varName + srcField);
-      relation = replaceVar(relation, varName);
       extraQueries.push(relation);
     }
 
-    function addFieldToResults({type, srcField, outField}) {
+    function addFieldToResults({type, srcField, outField, arrayMode}) {
       let nested = isNode(type);
-      let replaceWith;
-      if (nested) {
-        replaceWith = varName + srcField;
-      } else {
-        replaceWith = replaceVar(srcField, varName);
+      if (arrayMode) {
+        srcField = `COLLECT(${srcField})`;
       }
-
-      if (isArray(type)) {
-        replaceWith = `COLLECT(${replaceWith})`;
-      }
-      resultsFields.push(`${outField}: ${replaceWith}`);
+      resultsFields.push(`${outField}: ${srcField}`);
     }
   }
 }
