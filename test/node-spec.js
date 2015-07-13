@@ -184,7 +184,7 @@ describe('Node', () => {
         `);
       });
 
-      it.skip('handles clauses', () => {
+      it('handles clauses', () => {
         let Person = new Node({
           name: 'Person',
           description: 'Test',
@@ -202,7 +202,41 @@ describe('Node', () => {
         });
         let ast = parse('{ name, newFriends(limit: 10) { name } }');
         let [cypher] = Person.buildCypher(ast, 'n');
-        console.log(cypher);
+        expectCypher(cypher, `
+          MATCH (n)-[a:IS_FRIENDS_WITH]-(newFriends:Person)
+          ORDER BY a.createdOn LIMIT { limit }
+          WITH { name: newFriends.name } as newFriends, n
+          WITH { name: n.name, newFriends: COLLECT(newFriends) } as n
+        `);
+      });
+
+      it('handles deeply nested clauses', () => {
+        let Person = new Node({
+          name: 'Person',
+          description: 'Test',
+          fields: () => ({
+            name: 'string',
+            newFriends: {
+              type: [ Person ],
+              relation: '(n)-[a:IS_FRIENDS_WITH]-(newFriends:Person)',
+              clause: 'ORDER BY a.createdOn LIMIT { limit }',
+              args: {
+                limit: 10
+              }
+            }
+          })
+        });
+        let ast = parse('{ name, newFriends(limit: 10) { name newFriends(limit: 5) { name }} }');
+        let [cypher] = Person.buildCypher(ast, 'n');
+        expectCypher(cypher, `
+          MATCH (n)-[a:IS_FRIENDS_WITH]-(newFriends:Person)
+          ORDER BY a.createdOn LIMIT { limit }
+          MATCH (newFriends)-[newFriendsa:IS_FRIENDS_WITH]-(newFriendsnewFriends:Person)
+          ORDER BY newFriendsa.createdOn LIMIT { newFriendslimit }
+          WITH { name: newFriendsnewFriends.name } as newFriendsnewFriends, newFriends, n
+          WITH { name: newFriends.name, newFriends: COLLECT(newFriendsnewFriends) } as newFriends, n
+          WITH { name: n.name, newFriends: COLLECT(newFriends) } as n
+        `);
       });
     });
   });

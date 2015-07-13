@@ -110,13 +110,16 @@ export default class Node {
       namespaceVars(field);
       addFieldToResults(field);
       addAdditionalRelations(field);
+      addClauses(field);
     }
 
     function namespaceVars(field) {
       let propsWithPossibleVars = ['srcField', 'relation', 'clause'];
+      let renamedVars = {};
       propsWithPossibleVars.forEach(prop => {
         if (field[prop]) {
-          field[prop] = field[prop].replace(/(?:\(|\[|^)(\w+)/g, (str,placeholderVar, index) => {
+          field[prop] = field[prop].replace(/(?:\{|\(|\[|^)\s*(\w+)/g, (str,placeholderVar, index) => {
+            if (index == 0 && prop == 'clause') return str;
             let replaceWith;
             if (placeholderVar == 'n') {
               replaceWith = varName;
@@ -125,17 +128,27 @@ export default class Node {
             } else {
               replaceWith = placeholderVar;
             }
+            renamedVars[placeholderVar] = replaceWith;
             let res = str.replace(placeholderVar, replaceWith);
             return res;
           });
         }
       });
+      if (field.clause) {
+        for (var originVar in renamedVars) {
+          field.clause = field.clause.replace(new RegExp('\\b' + originVar + '\\b', 'g'), renamedVars[originVar]);
+        }
+      }
     }
 
     function addAdditionalRelations({relation, srcField, outField}) {
       if (!relation) return;
       relation = `MATCH ${relation}`;
       extraQueries.push(relation);
+    }
+
+    function addClauses({clause}) {
+      extraQueries.push(clause);
     }
 
     function addFieldToResults({type, srcField, outField, arrayMode}) {
