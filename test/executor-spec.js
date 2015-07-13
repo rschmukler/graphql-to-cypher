@@ -1,6 +1,8 @@
 import expect from 'expect.js';
 import { Executor, Node } from '../dist/';
 
+import neo4j from 'neo4j-promised-cypher';
+
 describe.skip('Executor', () => {
   let executor;
   beforeEach( () => {
@@ -18,30 +20,12 @@ describe.skip('Executor', () => {
     });
   });
 
-  describe('buildCypher', () => {
-    describe('Node', () => {
-      let Person;
-      before(() => {
-        Person = new Node({
-          name: 'Person',
-          description: 'A person',
-          fields: () => ({
-            name: 'string'
-          })
-        });
-      });
-
-      it('handles a simple field', () => {
-        executor.buildCypher(`{
-          alias:name, age, friends {
-            name
-          }
-        }`);
-      });
+  describe('e2e', () => {
+    let rawDb;
+    before(async () => {
+      rawDb = neo4j('neo4j');
+      await rawDb.query('MATCH (n) OPTIONAL MATCH (n)-[r]-() DELETE n, r');
     });
-  });
-
-  describe('run', () => {
     it('builds the query');
     it('runs the query');
     it('returns the result');

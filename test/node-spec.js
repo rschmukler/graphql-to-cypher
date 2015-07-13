@@ -100,7 +100,7 @@ describe('Node', () => {
       });
     });
 
-    describe.only('relations', () => {
+    describe('relations', () => {
       it('handles single nodes', () => {
         let Person = new Node({
           name: 'Person',

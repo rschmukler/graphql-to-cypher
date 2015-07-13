@@ -148,6 +148,7 @@ export default class Node {
     }
 
     function addClauses({clause}) {
+      if (!clause) return;
       extraQueries.push(clause);
     }
 
