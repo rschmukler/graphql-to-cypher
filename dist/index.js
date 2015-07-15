@@ -24,4 +24,3 @@ exports.Node = _node2['default'];
 exports.Enum = _node3['default'];
 exports.Executor = _executor2['default'];
 exports.Query = _query2['default'];
-//# sourceMappingURL=index.js.map

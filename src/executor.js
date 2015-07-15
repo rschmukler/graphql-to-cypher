@@ -13,12 +13,15 @@ export default class Executor {
   }
   async run(query, params = {}) {
     var ast = parse(query);
-    let schema = this._rootQuery.toSchema();
+    let root = this._rootQuery;
+    let schema = root.toSchema();
     let validationResult = validateDocument(schema, ast);
-    console.log(schema._schemaConfig.query._fields);
     if (!validationResult.isValid) {
       throw Error(validationResult.errors[0].message);
     }
-    return {};
+    root.buildFields();
+    let result = root.buildCypher({ast: ast });
+    console.log(result.cypher);
+    let res = (await this._db.query(result.cypher + 'result \nRETURN result', params)).result;
   }
 }

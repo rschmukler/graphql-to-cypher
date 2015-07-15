@@ -40,3 +40,16 @@ export var toGraphQLType = (type, {required} = {}) => {
   if (required) result = new GraphQLNonNull(result);
   return result;
 };
+
+export function isNode(type) {
+  return type instanceof Node || type[0] instanceof Node;
+}
+
+export function replaceVar(str, oldName, newName) {
+  if (!newName) {
+    newName = oldName;
+    oldName = 'n';
+  }
+  let regex = new RegExp(`\\b${oldName}\\b`,'g');
+  return str.replace(regex, newName);
+}

@@ -124,7 +124,10 @@ describe('Executor', () => {
             type: Person,
             query: 'MATCH (n:Person { name: { name }})',
             args: {
-              name: 'string'
+              name: {
+                type: 'string',
+                description: 'The name of the person'
+              }
             }
           }
         })
@@ -147,12 +150,14 @@ describe('Executor', () => {
     });
 
     it.only('handles simple queries', async () => {
-      let query = `{
-        bob: FindPerson(name: $name) {
+      let query = `
+      {
+        bob: FindPerson(name: "Bob") {
           name, age
         }
-      }`;
-      let result = await executor.run(query, { name: "Bob" });
+      }
+      `;
+      let result = await executor.run(query);
       expect(result).to.be.ok();
     });
   });
