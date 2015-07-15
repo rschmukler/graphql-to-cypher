@@ -21,7 +21,7 @@ describe('Node', () => {
         })
       });
       let ast = parse('{ name }');
-      let {cypher} = node.buildCypher(ast, 'n');
+      let {cypher} = node.buildCypher({ast: ast, ctx: 'n'});
       expect(cypher).to.equal('WITH { name: n.name } as n');
     });
 
@@ -37,7 +37,7 @@ describe('Node', () => {
         })
       });
       let ast = parse('{ id }');
-      let {cypher} = node.buildCypher(ast, 'n');
+      let {cypher} = node.buildCypher({ast: ast, ctx: 'n'});
       expect(cypher).to.equal('WITH { id: id(n) } as n');
     });
 
@@ -95,7 +95,7 @@ describe('Node', () => {
         });
         let graphQl = '{ name,  isOlderThan(age: 40)}';
         let ast = parse(graphQl);
-        let {cypher} = Person.buildCypher(ast, 'n');
+        let {cypher} = Person.buildCypher({ ast: ast, ctx: 'n' });
         expectCypher(cypher, `WITH { name: n.name, isOlderThan: n.age > { age } } as n`);
       });
     });
@@ -114,7 +114,7 @@ describe('Node', () => {
           })
         });
         let ast = parse('{ name onlyFriend { name } }');
-        let {cypher} = Person.buildCypher(ast, 'n');
+        let {cypher} = Person.buildCypher({ast: ast, ctx: 'n'});
         expectCypher(cypher, `
           MATCH (n)-[:IS_ONLY_FRIENDS_WITH]-(onlyFriend:Person)
           WITH { name: onlyFriend.name } as onlyFriend, n
@@ -139,7 +139,7 @@ describe('Node', () => {
         });
 
         let ast = parse('{ name friends { name } }');
-        let {cypher} = Person.buildCypher(ast, 'n');
+        let {cypher} = Person.buildCypher({ast: ast, ctx: 'n'});
         expectCypher(cypher, `
           MATCH (n)-[:IS_FRIENDS_WITH]-(friends:Person)
           WITH { name: friends.name } as friends, n
@@ -174,7 +174,7 @@ describe('Node', () => {
 
         let graphQl = '{ name, friends { name, favoriteFoods { name } }}';
         let ast = parse(graphQl);
-        let {cypher} = Person.buildCypher(ast, 'n');
+        let {cypher} = Person.buildCypher({ast: ast, ctx: 'n'});
         expectCypher(cypher, `
           MATCH (n)-[:IS_FRIENDS_WITH]-(friends:Person)
           MATCH (friends)-[:LIKES]->(friendsfavoriteFoods:Food)
@@ -201,7 +201,7 @@ describe('Node', () => {
           })
         });
         let ast = parse('{ name, newFriends(limit: 10) { name } }');
-        let {cypher} = Person.buildCypher(ast, 'n');
+        let {cypher} = Person.buildCypher({ ast: ast, ctx: 'n' });
         expectCypher(cypher, `
           MATCH (n)-[a:IS_FRIENDS_WITH]-(newFriends:Person)
           ORDER BY a.createdOn LIMIT { limit }
@@ -227,7 +227,7 @@ describe('Node', () => {
           })
         });
         let ast = parse('{ name, newFriends(limit: 10) { name newFriends(limit: 5) { name }} }');
-        let {cypher} = Person.buildCypher(ast, 'n');
+        let {cypher} = Person.buildCypher({ast: ast, ctx: 'n' });
         expectCypher(cypher, `
           MATCH (n)-[a:IS_FRIENDS_WITH]-(newFriends:Person)
           ORDER BY a.createdOn LIMIT { limit }

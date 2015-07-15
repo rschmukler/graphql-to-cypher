@@ -149,7 +149,7 @@ describe('Executor', () => {
       }
     });
 
-    it.only('handles simple queries', async () => {
+    it('handles simple queries', async () => {
       let query = `
       {
         bob: FindPerson(name: "Bob") {
@@ -158,7 +158,62 @@ describe('Executor', () => {
       }
       `;
       let result = await executor.run(query);
-      expect(result).to.be.ok();
+      expect(result).to.eql({ bob: {
+        name: "Bob",
+        age: 30
+      }});
+    });
+
+    it.skip('handles multiple queries', async () => {
+      let query = `
+      {
+        bob: FindPerson(name: "Bob") {
+          name, age
+        },
+        steve: FindPerson(name: "Steve") {
+          age
+        }
+      }
+      `;
+      let result = await executor.run(query);
+      expect(result).to.eql({ bob: {
+        name: "Bob",
+        age: 30
+      }});
+    });
+
+    it('handles queries with variables', async () => {
+      let query = `
+      query FindBob($name: String) {
+        bob: FindPerson(name: $name) {
+          name, age
+        }
+      }
+      `;
+      let result = await executor.run(query, {name: "Bob" });
+      expect(result).to.eql({ bob: {
+        name: "Bob",
+        age: 30
+      }});
+    });
+
+    it.only('handles queries with fragments', async () => {
+      let query = `
+      query FindBob {
+        bob: FindPerson(name: "Bob") {
+          ...nameAge
+        }
+      }
+
+      fragment nameAge on Person {
+        name, age
+      }
+      `;
+      let result = await executor.run(query);
+      expect(result).to.eql({ bob: {
+        name: "Bob",
+        age: 30
+      }});
     });
   });
 });

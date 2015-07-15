@@ -60,7 +60,7 @@ export default class Node {
       }
     }
   }
-  buildCypher({ast, ctx = ['n'], noCtxShift}) {
+  buildCypher({ast, ctx = ['n'], noCtxShift, params = {}}) {
     if (!Array.isArray(ctx)) ctx = [ctx];
     let varName = ctx[0];
     let name = this.name;
@@ -73,6 +73,23 @@ export default class Node {
 
 
     visit(ast, {
+      OperationDefinition: {
+        enter(node) {
+          console.log(node.selectionSet.selections[0].selectionSet);
+        }
+      },
+      Argument: {
+        enter(node) {
+          let argName = node.name.value;
+          let argValue;
+          if (node.value.kind == 'Variable') {
+            argValue = params[node.value.name.value];
+          } else {
+            argValue = node.value.value;
+          }
+          params[arrayToStr(ctx.slice(1), '.') + argName] = argValue;
+        }
+      },
       Field: {
         enter(node) {
           let fieldName = node.name.value;
@@ -85,7 +102,7 @@ export default class Node {
             node._alreadyProcessing = true;
             let nestedVarName = ctx.length > 1 ? varName + field.srcField : field.srcField;
             if (!noCtxShift) ctx.unshift(nestedVarName);
-            let {cypher} = typeForField(field).buildCypher({ast: node, ctx: ctx});
+            let {cypher} = typeForField(field).buildCypher({ast: node, ctx: ctx, params: params});
             delete node._alreadyProcessing;
             seenFields.push(field);
             nestedResults.push(cypher);
@@ -107,7 +124,7 @@ export default class Node {
     cypher += `WITH { ${resultsFields.join(', ')} } as ${ctx.join(', ')}`;
     if (!noCtxShift) ctx.shift();
 
-    return { cypher: cypher, nextOps: nextOps };
+    return { cypher: cypher, nextOps: nextOps, params: params };
 
     function handleField(field) {
       field = extend(true, {}, field);
@@ -216,8 +233,8 @@ function normalizeField(field) {
 }
 
 
-function arrayToStr(arr) {
-  return arr.join('\n') + (arr.length ? '\n' : '');
+function arrayToStr(arr, joinWith = '\n') {
+  return arr.join(joinWith) + (arr.length ? joinWith : '');
 }
 
 const PRIMITIVES = [
