@@ -1,6 +1,14 @@
-export default class Query {
-  constructor({name, description, fields} = {}) {
-    this.name = name;
-    this.description = description;
+import Node from './node';
+import { GraphQLSchema } from 'graphql/lib/type';
+
+export default class Query extends Node {
+  constructor(opts) {
+    super(opts);
+  }
+
+  toSchema() {
+    return new GraphQLSchema({
+      query: this.toGraphQL()
+    });
   }
 }

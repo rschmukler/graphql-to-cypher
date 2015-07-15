@@ -2,6 +2,7 @@ import extend from 'extend';
 import { parse } from 'graphql/lib/language/parser';
 import { execute } from 'graphql/lib/executor/executor';
 import { validateDocument } from 'graphql/lib/validator';
+import { toGraphQLType } from './utils';
 
 import { visit } from 'graphql/lib/language/visitor';
 
@@ -64,10 +65,11 @@ export default class Node {
     let name = this.name;
     let possibleFields = this.buildFields();
     let cypher = '';
-    let newAst, result;
 
     let seenFields = [];
     let nestedResults = [];
+    let nextOps = [];
+
 
     visit(ast, {
       Field: {
@@ -82,13 +84,14 @@ export default class Node {
             node._alreadyProcessing = true;
             let nestedVarName = ctx.length > 1 ? varName + field.srcField : field.srcField;
             ctx.unshift(nestedVarName);
-            let [cypher] = typeForField(field).buildCypher(node, ctx);
+            let {cypher} = typeForField(field).buildCypher(node, ctx);
             delete node._alreadyProcessing;
             seenFields.push(field);
             nestedResults.push(cypher);
             return false;
           }
           seenFields.push(field);
+          return null;
         }
       }
     });
@@ -103,7 +106,7 @@ export default class Node {
     cypher += `WITH { ${resultsFields.join(', ')} } as ${ctx.join(', ')}`;
     ctx.shift();
 
-    return [cypher, newAst, result];
+    return { cypher: cypher, nextOps: nextOps };
 
     function handleField(field) {
       field = extend(true, {}, field);
@@ -159,6 +162,32 @@ export default class Node {
       }
       resultsFields.push(`${outField}: ${srcField}`);
     }
+  }
+  toGraphQL() {
+    if (this._graphQLObject) return this._graphQLObject;
+    let self = this;
+    console.log(this.name);
+
+
+    return this._graphQLObject = new GraphQLObjectType({
+      name: this.name,
+      description: this.description,
+      fields: () => {
+        console.log(self.name + ' - calling origin');
+        let originFields = self.fields();
+        let graphQLFields = {};
+        Object.keys(originFields).forEach(convertField);
+        function convertField(fieldName) {
+          let field = originFields[fieldName];
+          graphQLFields[fieldName] = {
+            name: field.name,
+            description: field.description,
+            type: toGraphQLType(field.type),
+            resolve: () => {}
+          };
+        }
+      }
+    });
   }
 }
 

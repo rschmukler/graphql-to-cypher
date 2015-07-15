@@ -1,7 +1,7 @@
 import expect from 'expect.js';
 import { Query } from '../dist/';
 
-describe('Query', () => {
+describe.skip('Query', () => {
   it('can be constructed', () => {
     var q = new Query();
   });
